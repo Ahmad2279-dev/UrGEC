@@ -1,0 +1,48 @@
+### 1. 模型路径与加速配置 (Model & Acceleration)
+model_name_or_path: /myfile/my/llms/Llama-3.2-3B  # ⚠️ 请替换为你实际下载的基座模型路径
+flash_attn: fa2                             # 🌟 开启 FlashAttention-2，极致提升注意力机制的计算效率
+
+### 2. 微调方法与策略 (Method)
+stage: sft
+do_train: true
+finetuning_type: lora                       # 使用 LoRA 轻量化微调
+lora_target: all                          # 挂载到所有线性层（效果最好）
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+# upcast_layernorm: true                      # 🌟 必须新增：保护 FP8 底座的训练稳定性
+
+### 3. 数据集与 Packing 核心配置 (Dataset)
+dataset: urgec_train                        # 你的训练集登记名称
+eval_dataset: urgec_dev                     # 你的验证集登记名称
+dataset_dir:  /myfile/my/LlamaFactory/data
+template: llama3                              
+cutoff_len: 2048                            # 🌟 拼包的最大长度。对于 24G 显存，设为 2048 最佳
+packing: true
+seed: 42                               # 🌟🌟🌟 开启 Packing 数据打包！(核心提速秘籍)
+overwrite_cache: false                       # 数据改变时重新生成缓存
+preprocessing_num_workers: 10               # 使用 16 个 CPU 核心来并发处理这 81 万条数据，极速预处理
+
+### 4. 训练超参数 (Training Hyperparameters)
+per_device_train_batch_size: 2              # 单卡 Batch Size（因为 Packing 把长度拉到了 2048，设 2 或 4 即可）
+gradient_accumulation_steps: 8              # 梯度累加。最终全局 Batch = 2 * 8 = 16 (每个 Batch 包含海量短句)
+learning_rate: 2.0e-5
+optim: adamw_torch
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true                                  # 🌟 使用 BF16 精度 (需要 RTX30/40系 或 A100/H100 显卡)，比 FP16 更稳、不溢出
+
+### 5. 验证与日志保存 (Eval & Output)
+output_dir: /myfile/my/ahmad/train_llama3.2-3b # 模型权重保存的文件夹路径
+logging_steps: 10
+save_steps: 500
+plot_loss: true
+overwrite_output_dir: true
+# resume_from_checkpoint: true
+
+per_device_eval_batch_size: 2               # 验证集 Batch Size
+eval_strategy: steps                  # 边训练边验证
+eval_steps: 500                             # 每 500 步验证一次
+load_best_model_at_end: true                # 🌟 训练结束后，自动保存 Eval Loss 最小的那个最佳断点
+# deepspeed: /myfile/my/LlamaFactory/examples/deepspeed/ds_z3_config.json 
